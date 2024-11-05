@@ -30,8 +30,6 @@ func main() {
 		log.Fatal("Invalid arguments")
 	}
 
-	log.Println("args", os.Args)
-
 	command := os.Args[1]
 
 	switch command {
@@ -171,6 +169,7 @@ func runRemote() {
 	socketMux := http.NewServeMux()
 
 	socketMux.HandleFunc("/copy", func(w http.ResponseWriter, r *http.Request) {
+		log.Println("copy")
 		if r.Method != "POST" {
 			w.WriteHeader(http.StatusMethodNotAllowed)
 			return
@@ -196,6 +195,7 @@ func runRemote() {
 	})
 
 	socketMux.HandleFunc("/paste", func(w http.ResponseWriter, r *http.Request) {
+		log.Println("paste")
 		if r.Method != "GET" {
 			w.WriteHeader(http.StatusMethodNotAllowed)
 			return
@@ -258,6 +258,7 @@ func runRemote() {
 	server := &http.Server{
 		Handler: wsHandler,
 	}
+
 	wg.Add(1)
 	l, err := net.Listen("tcp", "0.0.0.0:2679")
 	if err != nil {
@@ -293,7 +294,7 @@ func runLocal() {
 		cancel()
 	}()
 
-	u := url.URL{Scheme: "ws", Host: "dragonite:2679", Path: "/"}
+	u := url.URL{Scheme: "ws", Host: "localhost:2679", Path: "/"}
 	log.Printf("connecting to %s", u.String())
 
 	ws, _, err := websocket.DefaultDialer.Dial(u.String(), nil)
