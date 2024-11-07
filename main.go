@@ -73,7 +73,7 @@ func copyToRemoteClipboard() {
 	if buf.Len() <= 2 {
 		return
 	}
-	req, err := http.NewRequest("POST", "/copy", &buf)
+	req, err := http.NewRequest("POST", "http://foo/copy", &buf)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -87,7 +87,7 @@ func copyToRemoteClipboard() {
 
 func pasteFromRemoteClipboard() {
 	client := unixClient()
-	req, err := http.NewRequest("GET", "/paste", nil)
+	req, err := http.NewRequest("GET", "http://bar/paste", nil)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -235,6 +235,7 @@ func runRemote() {
 
 	wsHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		remoteIP, _, err := net.SplitHostPort(r.RemoteAddr)
+		log.Println("ws connection from", remoteIP)
 
 		c, err := upgrader.Upgrade(w, r, nil)
 		m.addClient(remoteIP, &localClipboard{conn: c})
@@ -294,7 +295,7 @@ func runLocal() {
 		cancel()
 	}()
 
-	u := url.URL{Scheme: "ws", Host: "localhost:2679", Path: "/"}
+	u := url.URL{Scheme: "ws", Host: "dragonite:2679", Path: "/"}
 	log.Printf("connecting to %s", u.String())
 
 	ws, _, err := websocket.DefaultDialer.Dial(u.String(), nil)
