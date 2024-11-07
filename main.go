@@ -27,7 +27,7 @@ const (
 
 func main() {
 	if len(os.Args) < 2 {
-		log.Fatal("Invalid arguments")
+		log.Fatal("Invalid arguments", os.Args)
 	}
 
 	command := os.Args[1]
