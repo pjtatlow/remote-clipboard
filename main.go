@@ -183,8 +183,9 @@ type localClipboard struct {
 }
 
 type clipboardManager struct {
-	clients map[string]*localClipboard
-	mu      sync.Mutex
+	clients       map[string]*localClipboard
+	mu            sync.Mutex
+	lastClipboard []byte
 }
 
 func (m *clipboardManager) addClient(address string, c *localClipboard) {
@@ -202,8 +203,22 @@ func (m *clipboardManager) removeClient(address string) {
 func (m *clipboardManager) setValue(address string, value []byte) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	m.lastClipboard = value
 	if c, ok := m.clients[address]; ok {
 		c.value = value
+	}
+}
+
+func (m *clipboardManager) broadcastToAllClients(data []byte) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.lastClipboard = data
+	for addr, c := range m.clients {
+		c.value = data
+		if err := c.conn.WriteMessage(websocket.BinaryMessage, data); err != nil {
+			log.Printf("broadcast to %s: %v", addr, err)
+			c.conn.Close()
+		}
 	}
 }
 
@@ -341,12 +356,38 @@ func runRemote() {
 		server.Serve(l)
 	}()
 
-	c := make(chan os.Signal, 1)
-	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
-
-	<-c
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), time.Second*1)
+	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+
+	go func() {
+		c := make(chan os.Signal, 1)
+		signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+		<-c
+		cancel()
+	}()
+
+	// Watch the remote system clipboard for changes
+	go func() {
+		cb := clipboard.Watch(ctx, clipboard.FmtText)
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case data := <-cb:
+				m.mu.Lock()
+				isEcho := bytes.Equal(data, m.lastClipboard)
+				m.mu.Unlock()
+				if isEcho {
+					continue
+				}
+				m.broadcastToAllClients(data)
+			}
+		}
+	}()
+
+	<-ctx.Done()
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), time.Second*1)
+	defer shutdownCancel()
 
 	go socketServer.Shutdown(shutdownCtx)
 	go server.Shutdown(shutdownCtx)
